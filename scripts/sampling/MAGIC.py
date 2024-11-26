@@ -20,7 +20,6 @@ class MCTSNode(SampleNode):
     ):
         super().__init__(prompt, inputs, past_key_values, score, parent)
         self.active = False
-        self.spent = False
         self.visits = 0
         self.simulated_result: Optional[str] = None
         
@@ -41,18 +40,11 @@ class MCTSNode(SampleNode):
         should only ever be called by root in this implementation
         """
         node = self
-        while node.childs and any(child.active for child in node.childs):
-            active_childs = [c for c in node.childs if c.active and not c.spent]
-            
-            if not active_childs:
-                # NOTE: this part is completely baseless, just last ditch effort to make sure it doesn't get stuck
-                # it's basically the shortcoming of greedy method
-                print(f'If you\'re reading this, this method sucks') 
-                node.spent = True
-                node._backpropagate(0)
-                node = node.parent
-            
+        active_childs = [c for c in node.childs if c.active]
+        while active_childs:
             node = max(active_childs, key=lambda c: c.uct1(exploration_weight=exploration))
+            
+            active_childs = [c for c in node.childs if c.active]
             
         return node
         
@@ -74,7 +66,7 @@ class MCTSNode(SampleNode):
         # progressive widening
         k = max(2, 4-self.depth)
         alpha = 0.5 ** (1 + self.depth)
-        num_childs = np.ceil(k * self.visits ** alpha)
+        num_childs = int(k * self.visits ** alpha)
             
         total_gen = 0
         while len(self.childs) < num_childs:
@@ -208,7 +200,6 @@ def MAGIC_sample(
         
         # write result (if node is not None, has to be terminal)
         if node: 
-            node.spent = True
             results.append(node.simulated_result)
             print("Add result")
 
